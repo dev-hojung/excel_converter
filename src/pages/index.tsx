@@ -211,9 +211,21 @@ const processFile = async (file: File) => {
   // 다운로드
   const handleDownload = () => {
     if (!downloadUrl) return;
+    const now = new Date();
+
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0'); // 월은 0부터 시작하므로 +1
+    const day = String(now.getDate()).padStart(2, '0');
+
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+
+    const formattedDateTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+
     const link = document.createElement('a');
     link.href = downloadUrl;
-    link.download = 'custom.xlsx'; // 다운로드 파일명
+    link.download = `${formattedDateTime}.xlsx`; 
     link.click();
   };
 
@@ -234,7 +246,7 @@ const processFile = async (file: File) => {
   </div>
 )}
 
-      <h1 className="text-2xl font-bold mb-6 text-center">엑셀 업로드 및 변환</h1>
+      <h1 className="text-2xl font-bold mb-6 text-center">엑셀 변환</h1>
 
       {/* 드래그앤드롭 영역 */}
       <div
@@ -285,7 +297,7 @@ const processFile = async (file: File) => {
         onClick={() => processFile(file as File)}
         className="px-4 py-2 mr-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
       >
-        업로드 및 변환
+        변환
       </button>
 
       {/* 다운로드 버튼 */}
@@ -294,7 +306,7 @@ const processFile = async (file: File) => {
           onClick={handleDownload}
           className="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition-colors"
         >
-          결과 다운로드
+          다운로드
         </button>
       )}
     </div>

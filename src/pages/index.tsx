@@ -104,7 +104,20 @@ const processFile = async (file: File) => {
     const newWorkbook = new ExcelJS.Workbook();
     const newWorksheet = newWorkbook.addWorksheet('Converted');
     const header = ['제품군', '모델명', ...distinctYears, '총 합계'];
-    newWorksheet.addRow(header);
+    newWorksheet.addRow(header).eachCell(cell => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'd8eef2' },
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF000000' } },
+        bottom: { style: 'thin', color: { argb: 'FF000000' } },
+        right: { style: 'thin', color: { argb: 'FF000000' } },
+      };
+      cell.font = { bold: true };
+    })
 
     // 그룹별 데이터 행 및 요약 행 추가 (요약 행은 그룹이 바뀌는 시점에 추가)
     let currentGroup: string | null = null;
@@ -135,7 +148,7 @@ const processFile = async (file: File) => {
           cell.fill = {
             type: 'pattern',
             pattern: 'solid',
-            fgColor: { argb: 'FFFFE599' },
+            fgColor: { argb: 'ffe9da' },
           };
           cell.border = {
             top: { style: 'thin', color: { argb: 'FF000000' } },
@@ -149,7 +162,6 @@ const processFile = async (file: File) => {
         groupStartRow = newWorksheet.rowCount + 1;
       }
 
-      
       // 데이터 행 추가 (객체의 순서를 직접 구성)
       newWorksheet.addRow(Object.values(dataRow));
     });
@@ -175,7 +187,7 @@ const processFile = async (file: File) => {
         cell.fill = {
           type: 'pattern',
           pattern: 'solid',
-          fgColor: { argb: 'FFFFE599' },
+          fgColor: { argb: 'ffe9da' },
         };
         cell.border = {
           top: { style: 'thin', color: { argb: 'FF000000' } },
@@ -233,18 +245,18 @@ const processFile = async (file: File) => {
     <div className="relative max-w-xl mx-auto py-8">
       {/* 전체 화면 로딩 오버레이 */}
       {isLoading && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-    <div
-      className="flex flex-col items-center p-8 rounded-md shadow-xl"
-      style={{
-        background: 'linear-gradient(135deg, #ffffff 0%, #f0f4f8 100%)',
-      }}
-    >
-      <span className="inline-block h-16 w-16 animate-spin rounded-full border-8 border-purple-500 border-t-transparent mb-6"></span>
-      <p className="text-lg text-gray-800 font-semibold">처리 중...</p>
-    </div>
-  </div>
-)}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div
+            className="flex flex-col items-center p-8 rounded-md shadow-xl"
+            style={{
+              background: 'linear-gradient(135deg, #ffffff 0%, #f0f4f8 100%)',
+            }}
+          >
+            <span className="inline-block h-16 w-16 animate-spin rounded-full border-8 border-purple-500 border-t-transparent mb-6"></span>
+            <p className="text-lg text-gray-800 font-semibold">처리 중...</p>
+          </div>
+        </div>
+      )}
 
       <h1 className="text-2xl font-bold mb-6 text-center">엑셀 변환</h1>
 

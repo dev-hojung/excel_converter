@@ -1,4 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, DragEvent } from 'react';
+
+import ExcelJS, { Worksheet } from 'exceljs';
 
 export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -32,38 +35,178 @@ export default function UploadPage() {
     setDownloadUrl('');
   };
 
-  // 업로드 & 변환
-  const handleUpload = async () => {
-    if (!file) {
-      alert('파일을 먼저 선택(또는 드래그)하세요.');
+
+const processFile = async (file: File) => {
+  if (!file) {
+    alert('파일을 먼저 선택(또는 드래그)하세요.');
+    return;
+  }
+
+  setIsLoading(true);
+  try {
+    // FileReader 대신 file.arrayBuffer() 사용 (최신 브라우저 지원)
+    const arrayBuffer = await file.arrayBuffer();
+
+    // 기존 엑셀 파일 읽기
+    const workbook = new ExcelJS.Workbook();
+
+    await workbook.xlsx.load(arrayBuffer);
+
+    const worksheet = workbook.getWorksheet(1);
+    if (!worksheet) {
+      alert('워크시트를 찾을 수 없습니다.');
       return;
     }
 
-    try {
-      setIsLoading(true); // 업로드 시작 시 로딩 표시
-      const formData = new FormData();
-      formData.append('excel', file);
-
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
+    // 데이터 수집/가공 (헤더 제외)
+    const originalData: any[] = [];
+    worksheet.eachRow((row) => {
+      const rowObj: any = {};
+      row.eachCell((cell, colNumber) => {
+        const colName = worksheet.getColumn(colNumber).letter;
+        rowObj[colName] = cell.value;
       });
+      originalData.push(rowObj);
+    });
+    const dataWithoutHeader = originalData.slice(1);
+    const distinctYears = getDistinctYearPrefixes(dataWithoutHeader);
+    const codeArr = dataWithoutHeader.map((item) => item.C);
+    const uniqueCode = [...new Set(codeArr)];
 
-      if (!response.ok) {
-        throw new Error(`서버 응답 에러: ${response.statusText}`);
+    // uniqueModel 배열을 순회하여 그룹별 집계 (정렬된 aggregatedResults 생성)
+    const aggregatedResults = uniqueCode
+      .map((code) => {
+        const filtered = dataWithoutHeader.filter((item) => item.C === code);
+        const A = filtered[0].D;
+        const B = code;
+        const startChar = 'C';
+        const startCode = startChar.charCodeAt(0);
+        const endCode = String.fromCharCode(startCode + distinctYears.length);
+        const result: { [key: string]: any } = {};
+
+        distinctYears.forEach((value, index) => {
+          const key = String.fromCharCode(startCode + index);
+          result[key] = filtered
+            .filter((item) => `20${item.J?.substring(0, 2)}` === value)
+            .reduce((acc, curr) => acc + (curr.I ? curr.I : 0), 0);
+        });
+
+        result[endCode] = Object.values(result).reduce(
+          (acc, curr) => acc + curr,
+          0
+        );
+
+        return { A, B, ...result };
+      })
+      .sort((a, b) => String(a.A).localeCompare(String(b.A)));
+
+    // 새 워크북 생성 (변환 결과)
+    const newWorkbook = new ExcelJS.Workbook();
+    const newWorksheet = newWorkbook.addWorksheet('Converted');
+    const header = ['제품군', '모델명', ...distinctYears, '총 합계'];
+    newWorksheet.addRow(header);
+
+    // 그룹별 데이터 행 및 요약 행 추가 (요약 행은 그룹이 바뀌는 시점에 추가)
+    let currentGroup: string | null = null;
+    let groupStartRow = newWorksheet.rowCount + 1; // 데이터 시작 행 번호 (헤더 바로 아래)
+
+    aggregatedResults.forEach((dataRow) => {
+      if (currentGroup === null) {
+        currentGroup = dataRow.A;
+      } else if (dataRow.A !== currentGroup) {
+        // 그룹이 바뀌었으므로 이전 그룹의 요약 행 추가
+        const currentExcelRow = newWorksheet.rowCount + 1;
+        const summaryRow = newWorksheet.addRow([`${currentGroup} 계`]);
+        const totalColumns = header.length;
+        for (let col = 3; col <= totalColumns; col++) {
+          const colLetter = numberToColumnLetter(col);
+          const formula = `SUM(${colLetter}${groupStartRow}:${colLetter}${
+            currentExcelRow - 1
+          })`;
+          summaryRow.getCell(col).value = { formula };
+        }
+        // 병합 및 스타일 적용
+        newWorksheet.mergeCells(`A${summaryRow.number}:B${summaryRow.number}`);
+        summaryRow.getCell(1).alignment = {
+          vertical: 'middle',
+          horizontal: 'center',
+        };
+        summaryRow.eachCell((cell) => {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFE599' },
+          };
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FF000000' } },
+            left: { style: 'thin', color: { argb: 'FF000000' } },
+            bottom: { style: 'thin', color: { argb: 'FF000000' } },
+            right: { style: 'thin', color: { argb: 'FF000000' } },
+          };
+          cell.font = { bold: true };
+        });
+        currentGroup = dataRow.A;
+        groupStartRow = newWorksheet.rowCount + 1;
       }
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      setDownloadUrl(url);
-      alert('변환이 완료되었습니다. 다운로드 버튼을 클릭하세요!');
-    } catch (error) {
-      console.error(error);
-      alert('업로드/변환 중 오류가 발생했습니다.');
-    } finally {
-      setIsLoading(false); // 업로드 끝
+      
+      // 데이터 행 추가 (객체의 순서를 직접 구성)
+      newWorksheet.addRow(Object.values(dataRow));
+    });
+
+    // 마지막 그룹 요약 행 추가
+    if (currentGroup !== null) {
+      const currentExcelRow = newWorksheet.rowCount + 1;
+      const summaryRow = newWorksheet.addRow([`${currentGroup} 계`]);
+      const totalColumns = header.length;
+      for (let col = 3; col <= totalColumns; col++) {
+        const colLetter = numberToColumnLetter(col);
+        const formula = `SUM(${colLetter}${groupStartRow}:${colLetter}${
+          currentExcelRow - 1
+        })`;
+        summaryRow.getCell(col).value = { formula };
+      }
+      newWorksheet.mergeCells(`A${summaryRow.number}:B${summaryRow.number}`);
+      summaryRow.getCell(1).alignment = {
+        vertical: 'middle',
+        horizontal: 'center',
+      };
+      summaryRow.eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFE599' },
+        };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FF000000' } },
+          left: { style: 'thin', color: { argb: 'FF000000' } },
+          bottom: { style: 'thin', color: { argb: 'FF000000' } },
+          right: { style: 'thin', color: { argb: 'FF000000' } },
+        };
+        cell.font = { bold: true };
+      });
     }
-  };
+
+    autoAdjustColumnWidths(newWorksheet);
+
+    // 엑셀 파일을 버퍼로 생성 후 Blob URL 생성
+    const outputBuffer = await newWorkbook.xlsx.writeBuffer();
+    const blob = new Blob([outputBuffer], {
+      type:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const url = URL.createObjectURL(blob);
+    setDownloadUrl(url);
+    alert('변환 완료되었습니다. 다운로드 버튼을 클릭하세요!');
+  } catch (error) {
+    console.error(error);
+    alert('변환 중 오류가 발생했습니다.');
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+
 
   // 다운로드
   const handleDownload = () => {
@@ -139,7 +282,7 @@ export default function UploadPage() {
 
       {/* 업로드 & 변환 버튼 */}
       <button
-        onClick={handleUpload}
+        onClick={() => processFile(file as File)}
         className="px-4 py-2 mr-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
       >
         업로드 및 변환
@@ -157,3 +300,44 @@ export default function UploadPage() {
     </div>
   );
 }
+
+// 유틸리티 함수들
+const getDistinctYearPrefixes = (data: any[]): string[] => {
+  const yearSet = new Set<string>();
+  data.forEach((row) => {
+    if (row.J) {
+      const jValue = row.J.toString();
+      const prefix = jValue.slice(0, 2);
+      yearSet.add(`20${prefix}`);
+    }
+  });
+  return Array.from(yearSet);
+};
+
+const numberToColumnLetter = (num: number) => {
+  let letter = '';
+  while (num > 0) {
+    const mod = (num - 1) % 26;
+    letter = String.fromCharCode(65 + mod) + letter;
+    num = Math.floor((num - mod) / 26);
+  }
+  return letter;
+};
+
+const autoAdjustColumnWidths = (worksheet: Worksheet) => {
+  worksheet.columns.forEach((column: any) => {
+    let maxLength = 0;
+    column.eachCell({ includeEmpty: true }, (cell: any) => {
+      let cellValue = cell.value;
+      if (cellValue === null || cellValue === undefined) {
+        cellValue = '';
+      } else if (typeof cellValue === 'object' && cellValue.richText) {
+        cellValue = cellValue.richText.map((part: any) => part.text).join('');
+      } else {
+        cellValue = cellValue.toString();
+      }
+      maxLength = Math.max(maxLength, cellValue.length);
+    });
+    column.width = maxLength < 10 ? 10 : maxLength + 2;
+  });
+};

@@ -1,114 +1,159 @@
-import Image from "next/image";
-import { Geist, Geist_Mono } from "next/font/google";
+import React, { useState, DragEvent } from 'react';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+export default function UploadPage() {
+  const [file, setFile] = useState<File | null>(null);
+  const [downloadUrl, setDownloadUrl] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false); // 로딩 상태
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+  // 파일 직접 선택 시
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setFile(e.target.files[0]);
+    }
+    e.target.value = '';
+  };
 
-export default function Home() {
+  // 드래그된 파일을 영역에 놓을 때
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      setFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  // 드래그가 영역 위를 지날 때 (기본 이벤트 막아야 drop 가능)
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+  };
+
+  // 파일 제거
+  const handleRemoveFile = () => {
+    setFile(null);
+    setDownloadUrl('');
+  };
+
+  // 업로드 & 변환
+  const handleUpload = async () => {
+    if (!file) {
+      alert('파일을 먼저 선택(또는 드래그)하세요.');
+      return;
+    }
+
+    try {
+      setIsLoading(true); // 업로드 시작 시 로딩 표시
+      const formData = new FormData();
+      formData.append('excel', file);
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`서버 응답 에러: ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      setDownloadUrl(url);
+      alert('변환이 완료되었습니다. 다운로드 버튼을 클릭하세요!');
+    } catch (error) {
+      console.error(error);
+      alert('업로드/변환 중 오류가 발생했습니다.');
+    } finally {
+      setIsLoading(false); // 업로드 끝
+    }
+  };
+
+  // 다운로드
+  const handleDownload = () => {
+    if (!downloadUrl) return;
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = 'custom.xlsx'; // 다운로드 파일명
+    link.click();
+  };
+
   return (
+    <div className="relative max-w-xl mx-auto py-8">
+      {/* 전체 화면 로딩 오버레이 */}
+      {isLoading && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
     <div
-      className={`${geistSans.variable} ${geistMono.variable} grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]`}
+      className="flex flex-col items-center p-8 rounded-md shadow-xl"
+      style={{
+        background: 'linear-gradient(135deg, #ffffff 0%, #f0f4f8 100%)',
+      }}
     >
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/pages/index.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+      <span className="inline-block h-16 w-16 animate-spin rounded-full border-8 border-purple-500 border-t-transparent mb-6"></span>
+      <p className="text-lg text-gray-800 font-semibold">처리 중...</p>
+    </div>
+  </div>
+)}
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      <h1 className="text-2xl font-bold mb-6 text-center">엑셀 업로드 및 변환</h1>
+
+      {/* 드래그앤드롭 영역 */}
+      <div
+        className="w-full p-6 mb-4 text-center border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-300 transition-colors cursor-pointer"
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        {file ? (
+          <p className="text-gray-700 font-medium">
+            {file.name} (선택됨)
+          </p>
+        ) : (
+          <p className="text-gray-500">
+            이 영역에 파일을 드래그&드롭 하거나,<br />
+            아래 버튼으로 파일을 선택하세요.
+          </p>
+        )}
+      </div>
+
+      {/* 파일 선택 & 제거 버튼들 */}
+      <div className="flex items-center gap-2 mb-4">
+        <label
+          htmlFor="excel-file"
+          className="inline-block px-4 py-2 text-white bg-blue-500 rounded-md cursor-pointer hover:bg-blue-600 transition-colors"
+        >
+          파일 선택
+        </label>
+        <input
+          id="excel-file"
+          type="file"
+          accept=".xlsx, .xls"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+
+        {file && (
+          <button
+            onClick={handleRemoveFile}
+            className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+            파일 제거
+          </button>
+        )}
+      </div>
+
+      {/* 업로드 & 변환 버튼 */}
+      <button
+        onClick={handleUpload}
+        className="px-4 py-2 mr-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+      >
+        업로드 및 변환
+      </button>
+
+      {/* 다운로드 버튼 */}
+      {downloadUrl && (
+        <button
+          onClick={handleDownload}
+          className="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600 transition-colors"
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          결과 다운로드
+        </button>
+      )}
     </div>
   );
 }

@@ -4,7 +4,6 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { formidable } from 'formidable'; // <-- named import
 import fs from 'fs';
 import { Workbook, Worksheet } from 'exceljs';
-import { styleText } from 'util';
 
 export const config = {
   api: {
@@ -253,15 +252,15 @@ function numberToColumnLetter(num: number) {
 }
 
 function autoAdjustColumnWidths(worksheet: Worksheet) {
-  worksheet.columns.forEach((column) => {
+  worksheet.columns.forEach((column: any) => {
     let maxLength = 0;
-    column.eachCell({ includeEmpty: true }, (cell) => {
+    column.eachCell({ includeEmpty: true }, (cell: any) => {
       let cellValue = cell.value;
       if (cellValue === null || cellValue === undefined) {
         cellValue = '';
       } else if (typeof cellValue === 'object' && cellValue.richText) {
         // richText인 경우 텍스트 부분만 추출
-        cellValue = cellValue.richText.map(part => part.text).join('');
+        cellValue = cellValue.richText.map((part: any) => part.text).join('');
       } else {
         cellValue = cellValue.toString();
       }

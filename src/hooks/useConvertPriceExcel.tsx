@@ -40,6 +40,33 @@ const getCellTextValue = (cellValue: ExcelJS.CellValue): string => {
   // 숫자, 문자열 등 기본 타입
   return String(cellValue);
 };
+
+/**
+ * 날짜 값을 YYYY-MM-DD 형식으로 변환
+ * @description Date 객체, 날짜 문자열, 엑셀 시리얼 넘버 등을 YYYY-MM-DD 형식으로 변환
+ * @param value - 변환할 날짜 값
+ * @returns YYYY-MM-DD 형식 문자열 또는 원본 값
+ */
+const formatDateToYYYYMMDD = (value: string): string => {
+  if (!value) return "";
+
+  // 이미 YYYY-MM-DD 형식이면 그대로 반환
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+
+  // Date 객체로 파싱 시도
+  const date = new Date(value);
+  if (!isNaN(date.getTime())) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  // 파싱 실패 시 원본 반환
+  return value;
+};
 /**
  * 가격 변환 엑셀 훅
  * @description 모델명, 물품대(변경후), 판매가(변경후) 컬럼의 | 구분자 데이터를 행 단위로 분리 변환
@@ -169,11 +196,13 @@ export const useConvertPriceExcel = () => {
     modelName: number | null;
     price: number | null;
     salePrice: number | null;
+    applyDate: number | null;
   } => {
     const result = {
       modelName: null as number | null,
       price: null as number | null,
       salePrice: null as number | null,
+      applyDate: null as number | null,
     };
 
     headerRow.eachCell((cell, colNumber) => {
@@ -184,6 +213,8 @@ export const useConvertPriceExcel = () => {
         result.price = colNumber;
       } else if (cellValue === "판매가(변경후)") {
         result.salePrice = colNumber;
+      } else if (cellValue === "적용일자") {
+        result.applyDate = colNumber;
       }
     });
 
@@ -203,10 +234,20 @@ export const useConvertPriceExcel = () => {
       modelName: number | null;
       price: number | null;
       salePrice: number | null;
+      applyDate: number | null;
     },
-  ): { modelName: string; price: string; salePrice: string }[] => {
-    const result: { modelName: string; price: string; salePrice: string }[] =
-      [];
+  ): {
+    modelName: string;
+    price: string;
+    salePrice: string;
+    applyDate: string;
+  }[] => {
+    const result: {
+      modelName: string;
+      price: string;
+      salePrice: string;
+      applyDate: string;
+    }[] = [];
 
     // 헤더 행(1) 제외하고 데이터 행 순회
     worksheet.eachRow((row, rowNumber) => {
@@ -222,28 +263,35 @@ export const useConvertPriceExcel = () => {
       const salePriceValue = getCellTextValue(
         row.getCell(columnIndexes.salePrice!).value,
       );
+      const applyDateValue = columnIndexes.applyDate
+        ? getCellTextValue(row.getCell(columnIndexes.applyDate).value)
+        : "";
 
       // 다양한 수직선 문자 변형(|, │, ┃ 등)으로 분리
       const modelNames = splitByPipeVariants(modelNameValue);
       const prices = splitByPipeVariants(priceValue);
       const salePrices = splitByPipeVariants(salePriceValue);
+      const applyDates = splitByPipeVariants(applyDateValue);
 
       // 가장 긴 배열 기준으로 1:1 매칭
       const maxLength = Math.max(
         modelNames.length,
         prices.length,
         salePrices.length,
+        applyDates.length,
       );
 
       for (let i = 0; i < maxLength; i++) {
         const modelName = modelNames[i] || "";
         const price = prices[i] || "";
         const salePrice = salePrices[i] || "";
+        // 날짜 형식을 YYYY-MM-DD로 변환
+        const applyDate = formatDateToYYYYMMDD(applyDates[i] || "");
 
         // 모든 값이 비어있으면 스킵
-        if (!modelName && !price && !salePrice) continue;
+        if (!modelName && !price && !salePrice && !applyDate) continue;
 
-        result.push({ modelName, price, salePrice });
+        result.push({ modelName, price, salePrice, applyDate });
       }
     });
 
@@ -256,13 +304,18 @@ export const useConvertPriceExcel = () => {
    * @returns 새로운 ExcelJS 워크북
    */
   const createConvertedWorkbook = (
-    data: { modelName: string; price: string; salePrice: string }[],
+    data: {
+      modelName: string;
+      price: string;
+      salePrice: string;
+      applyDate: string;
+    }[],
   ): ExcelJS.Workbook => {
     const newWorkbook = new ExcelJS.Workbook();
     const newWorksheet = newWorkbook.addWorksheet("Converted");
 
     // 헤더 행 추가 및 스타일 적용
-    const header = ["모델명", "물품대(변경후)", "판매가(변경후)"];
+    const header = ["모델명", "물품대(변경후)", "판매가(변경후)", "적용일자"];
     newWorksheet.addRow(header).eachCell((cell) => {
       cell.fill = {
         type: "pattern",
@@ -280,7 +333,12 @@ export const useConvertPriceExcel = () => {
 
     // 데이터 행 추가
     data.forEach((item) => {
-      newWorksheet.addRow([item.modelName, item.price, item.salePrice]);
+      newWorksheet.addRow([
+        item.modelName,
+        item.price,
+        item.salePrice,
+        item.applyDate,
+      ]);
     });
 
     return newWorkbook;

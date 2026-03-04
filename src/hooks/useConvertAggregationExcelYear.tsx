@@ -117,7 +117,7 @@ export const useConvertAggregationExcel = ({ tab }: { tab: 'yearly' | 'monthly' 
           const key = String.fromCharCode(startChar.charCodeAt(0) + index);
           result[key] = filtered
             .filter(
-              (item) => tab === 'yearly' ? `20${item.J?.substring(0, 2)}` : `${item.J?.substring(0, 2)}년_${item.J?.substring(2, 4)}월` === distinctItem
+              (item) => (tab === 'yearly' ? `20${item.J?.substring(0, 2)}` : `${item.J?.substring(0, 2)}년_${item.J?.substring(2, 4)}월`) === distinctItem
             )
             .reduce((acc, curr) => acc + (curr.H || 0), 0);
         });

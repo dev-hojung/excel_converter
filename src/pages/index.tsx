@@ -1,12 +1,13 @@
 import { Aggregation } from "@/components/Aggregation";
 import { PriceConverter } from "@/components/PriceConverter";
+import { QuantityAggregation } from "@/components/QuantityAggregation";
 import React, { useState } from "react";
 
 export default function UploadPage() {
-  // 현재 활성화된 탭 상태 (집계 / 철거 / 가격변환)
-  const [activeTab, setActiveTab] = useState<"집계" | "철거" | "가격변환">(
-    "집계",
-  );
+  // 현재 활성화된 탭 상태 (집계 / 수량집계 / 가격변환)
+  const [activeTab, setActiveTab] = useState<
+    "집계" | "동일모델 수량집계" | "가격변환"
+  >("집계");
 
   return (
     <div className="relative max-w-xl mx-auto py-8">
@@ -24,14 +25,14 @@ export default function UploadPage() {
           집계
         </button>
         <button
-          onClick={() => setActiveTab("철거")}
+          onClick={() => setActiveTab("동일모델 수량집계")}
           className={`flex-1 py-3 text-center font-semibold transition-colors duration-300 ${
-            activeTab === "철거"
+            activeTab === "동일모델 수량집계"
               ? "bg-blue-500 text-white"
               : "bg-gray-200 text-gray-800 hover:bg-gray-300"
           }`}
         >
-          철거
+          수량집계
         </button>
         <button
           onClick={() => setActiveTab("가격변환")}
@@ -45,8 +46,8 @@ export default function UploadPage() {
         </button>
       </div>
       {activeTab === "집계" && <Aggregation />}
-      {/* 철거 탭 컨텐츠 */}
-      {activeTab === "철거" && "철거"}
+      {/* 수량집계 탭 컨텐츠 */}
+      {activeTab === "동일모델 수량집계" && <QuantityAggregation />}
       {/* 가격변환 탭 컨텐츠 */}
       {activeTab === "가격변환" && <PriceConverter />}
     </div>
